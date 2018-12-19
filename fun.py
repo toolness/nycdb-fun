@@ -97,7 +97,11 @@ def main():
                 name='ACRISParty'
             )
             for p in parties:
-                print(f"  {p.name} / {p.address1} / {p.address2} / {p.city} {p.state} {p.country}")
+                party = " / ".join(filter(None, [
+                    p.name, p.address1, p.address2, p.city, p.state,
+                    p.country if p.country != "US" else None
+                ]))
+                print(f"  {party}")
 
 
 if __name__ == '__main__':
