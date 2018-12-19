@@ -77,25 +77,20 @@ def main():
             f"ORDER BY rpm.recordedfiled",
             name='ACRISDocument'
         )
-        docids = tuple(d.documentid for d in docs)
-        parties = friendly_execute(
-            cur,
-            f"SELECT * FROM real_property_parties as rpp "
-            f"WHERE rpp.documentid in {repr(docids)}",
-            name='ACRISParty'
-        )
         for d in docs:
             amt = f" for ${d.docamount:,} ({d.pcttransferred}% transferred)" if d.docamount else ""
             print(
                 f"On {d.docdate or d.recordedfiled} a {d.doctype}{amt} "
                 "was signed between:"
             )
-            doc_parties = [p for p in parties if p.documentid == d.documentid]
-            for p in doc_parties:
-                party = " / ".join(filter(None, [
-                    p.name, p.address1, p.address2, p.city, p.state,
-                    p.country if p.country != "US" else None]))
-                print(f"  {party}")
+            parties = friendly_execute(
+                cur,
+                f"SELECT * FROM real_property_parties as rpp "
+                f"WHERE rpp.documentid = '{d.documentid}'",
+                name='ACRISParty'
+            )
+            for p in parties:
+                print(f"  {p.name} / {p.address1} / {p.address2} / {p.city} {p.state} {p.country}")
 
 
 if __name__ == '__main__':
