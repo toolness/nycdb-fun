@@ -68,6 +68,13 @@ def main():
         dob_viols = get_count(cur, f"FROM dob_violations WHERE bbl = '{bbl}'")
         print(f"The property has {hpd_viols} HPD violations and {dob_viols} DOB violations.")
 
+        plutos = friendly_execute(
+            cur,
+            f"SELECT * FROM pluto_18v1 WHERE bbl = '{bbl}'"
+        )
+        for pluto in plutos:
+            print(f"The property has {pluto.numfloors} floors and was built in {pluto.yearbuilt}.")
+
         docs = friendly_execute(
             cur,
             f"SELECT * "
