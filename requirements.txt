@@ -4,3 +4,4 @@ docopt
 python-dotenv
 pydantic
 mypy==0.650
+pyyaml
