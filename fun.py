@@ -25,11 +25,14 @@ import geocoding
 dotenv.load_dotenv()
 
 
+RESERVED_NAMES = ['class']
+
+
 def friendly_fetchall(cursor, name: str):
     colnames: List[str] = []
     for desc in cursor.description:
         colname = desc[0]
-        while colname in colnames:
+        while colname in colnames + RESERVED_NAMES:
             colname += '_'
         colnames.append(colname)
 
@@ -64,9 +67,27 @@ def main():
     nycdb = psycopg2.connect(os.environ['DATABASE_URL'])
 
     with nycdb.cursor() as cur:
-        hpd_viols = get_count(cur, f"FROM hpd_violations WHERE bbl = '{bbl}'")
-        dob_viols = get_count(cur, f"FROM dob_violations WHERE bbl = '{bbl}'")
-        print(f"The property has {hpd_viols} HPD violations and {dob_viols} DOB violations.")
+        num_hpd_viols = get_count(cur, f"FROM hpd_violations WHERE bbl = '{bbl}'")
+        num_dob_viols = get_count(cur, f"FROM dob_violations WHERE bbl = '{bbl}'")
+        print(f"The property has {num_hpd_viols} HPD violations and {num_dob_viols} DOB violations.")
+
+        if num_hpd_viols:
+            hpd_viols = friendly_execute(
+                cur,
+                f"SELECT * FROM hpd_violations WHERE bbl = '{bbl}' ORDER BY inspectiondate DESC LIMIT 10"
+            )
+            print("Here are some HPD violations:")
+            for v in hpd_viols:
+                print(f"  * {v.inspectiondate} {v.novdescription}")
+
+        if num_dob_viols:
+            dob_viols = friendly_execute(
+                cur,
+                f"SELECT * FROM dob_violations WHERE bbl = '{bbl}' ORDER BY issuedate DESC LIMIT 10"
+            )
+            print("Here are some DOB violations:")
+            for v in dob_viols:
+                print(f"  * {v.issuedate} {v.description}")
 
         plutos = friendly_execute(
             cur,
