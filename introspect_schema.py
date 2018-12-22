@@ -47,6 +47,7 @@ class ColumnMeta:
     verbose_name: str = ''
     description: str = ''
     data_type: str = ''
+    data_subtype: str = ''
     is_nullable: bool = False
     is_in_db_schema: bool = False
 
@@ -132,14 +133,15 @@ def download_table_metadata(datasets_yml: Dict[str, Any]) -> Dict[str, TableMeta
 
 def introspect_schema_and_populate_table_metadata(tables: Dict[str, TableMeta]):
     nycdb = psycopg2.connect(os.environ['DATABASE_URL'])
+    table_schema = "public"
     with nycdb.cursor() as cur:
         cur.execute(
-            f"SELECT table_name, column_name, is_nullable, data_type "
+            f"SELECT table_name, column_name, is_nullable, data_type, dtd_identifier "
             f"FROM information_schema.columns "
-            f"WHERE table_schema = 'public' "
+            f"WHERE table_schema = '{table_schema}' "
             f"ORDER BY table_name, ordinal_position"
         )
-        for table_name, column_name, is_nullable, data_type in cur.fetchall():
+        for table_name, column_name, is_nullable, data_type, dtd_identifier in cur.fetchall():
             if table_name not in tables:
                 tables[table_name] = TableMeta(table_name)
             table = tables[table_name]
@@ -149,6 +151,14 @@ def introspect_schema_and_populate_table_metadata(tables: Dict[str, TableMeta]):
             column = table.columns[column_name]
             column.is_nullable = True if is_nullable == 'YES' else False
             column.data_type = data_type
+            if data_type == 'ARRAY':
+                cur.execute(f"SELECT data_type FROM information_schema.element_types AS e "
+                            f"WHERE e.object_schema = '{table_schema}' AND "
+                            f"e.object_name = '{table_name}' AND "
+                            f"e.object_type = 'TABLE' AND "
+                            f"e.collection_type_identifier = '{dtd_identifier}'")
+                array_type = cur.fetchone()[0]
+                column.data_subtype = array_type
             column.is_in_db_schema = True
 
     for table_name, table in list(tables.items()):
