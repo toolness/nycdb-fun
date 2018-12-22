@@ -17,6 +17,7 @@ import re
 from typing import Dict, Any, NamedTuple, List, Optional, Callable
 from pathlib import Path
 from dataclasses import dataclass, field
+from enum import Enum
 import textwrap
 import json
 import dotenv
@@ -41,13 +42,27 @@ API_VIEW_REGEX = re.compile(r"^(https:\/\/data\.cityofnewyork\.us\/api\/views\/[
 API_VIEW_SOURCE = 'the City of New York API metadata'
 
 
+class DataType(Enum):
+    array = 'ARRAY'
+    character = 'character'
+    text = 'text'
+    integer = 'integer'
+    bigint = 'bigint'
+    smallint = 'smallint'
+    date = 'date'
+    boolean = 'boolean'
+    numeric = 'numeric'
+    json = 'json'
+    time = 'time without time zone'
+
+
 @dataclass
 class ColumnMeta:
     name: str
     verbose_name: str = ''
     description: str = ''
-    data_type: str = ''
-    data_subtype: str = ''
+    data_type: Optional[DataType] = None
+    data_subtype: Optional[DataType] = None
     is_nullable: bool = False
     is_in_db_schema: bool = False
 
@@ -150,14 +165,14 @@ def introspect_schema_and_populate_table_metadata(tables: Dict[str, TableMeta]):
                 table.columns[column_name] = ColumnMeta(column_name)
             column = table.columns[column_name]
             column.is_nullable = True if is_nullable == 'YES' else False
-            column.data_type = data_type
-            if data_type == 'ARRAY':
+            column.data_type = DataType(data_type)
+            if column.data_type == DataType.array:
                 cur.execute(f"SELECT data_type FROM information_schema.element_types AS e "
                             f"WHERE e.object_schema = '{table_schema}' AND "
                             f"e.object_name = '{table_name}' AND "
                             f"e.object_type = 'TABLE' AND "
                             f"e.collection_type_identifier = '{dtd_identifier}'")
-                array_type = cur.fetchone()[0]
+                array_type = DataType(cur.fetchone()[0])
                 column.data_subtype = array_type
             column.is_in_db_schema = True
 
@@ -223,7 +238,7 @@ def document_datasets(datasets: List[DatasetMeta], show_toc: bool=True):
             for column in table.columns.values():
                 article_adj = "A" if column.is_nullable else "A required"
                 print(wrap(
-                    f"* `{column.name}` - {article_adj} {column.data_type} value.\n",
+                    f"* `{column.name}` - {article_adj} {column.data_type.value} value.\n",
                     "  ",
                     "    "
                 ))
