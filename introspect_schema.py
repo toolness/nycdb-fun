@@ -63,6 +63,7 @@ class ColumnMeta:
     description: str = ''
     data_type: Optional[DataType] = None
     data_subtype: Optional[DataType] = None
+    numeric_scale: Optional[int] = None
     is_nullable: bool = False
     is_in_db_schema: bool = False
 
@@ -151,12 +152,13 @@ def introspect_schema_and_populate_table_metadata(tables: Dict[str, TableMeta]):
     table_schema = "public"
     with nycdb.cursor() as cur:
         cur.execute(
-            f"SELECT table_name, column_name, is_nullable, data_type, dtd_identifier "
+            f"SELECT table_name, column_name, is_nullable, data_type, dtd_identifier, numeric_scale "
             f"FROM information_schema.columns "
             f"WHERE table_schema = '{table_schema}' "
             f"ORDER BY table_name, ordinal_position"
         )
-        for table_name, column_name, is_nullable, data_type, dtd_identifier in cur.fetchall():
+        for (table_name, column_name, is_nullable, data_type, dtd_identifier,
+             numeric_scale) in cur.fetchall():
             if table_name not in tables:
                 tables[table_name] = TableMeta(table_name)
             table = tables[table_name]
@@ -165,6 +167,7 @@ def introspect_schema_and_populate_table_metadata(tables: Dict[str, TableMeta]):
                 table.columns[column_name] = ColumnMeta(column_name)
             column = table.columns[column_name]
             column.is_nullable = True if is_nullable == 'YES' else False
+            column.numeric_scale = numeric_scale
             column.data_type = DataType(data_type)
             if column.data_type == DataType.array:
                 cur.execute(f"SELECT data_type FROM information_schema.element_types AS e "
@@ -241,6 +244,9 @@ def document_datasets(datasets: List[DatasetMeta], show_toc: bool=True):
                 if column.data_type == DataType.array:
                     assert column.data_subtype is not None
                     dtype = f"{column.data_subtype.value} array"
+                elif column.data_type == DataType.numeric:
+                    scale = column.numeric_scale
+                    dtype = "numeric integer" if scale == 0 else "numeric float"
                 else:
                     dtype = column.data_type.value
                 print(wrap(
