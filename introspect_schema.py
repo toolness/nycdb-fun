@@ -237,10 +237,14 @@ def document_datasets(datasets: List[DatasetMeta], show_toc: bool=True):
             print(f"\nThis table has the following columns:\n")
             for column in table.columns.values():
                 article_adj = "A" if column.is_nullable else "A required"
-                if not column.data_type:
-                    raise AssertionError('Column data type is expected to be populated')
+                assert column.data_type is not None
+                if column.data_type == DataType.array:
+                    assert column.data_subtype is not None
+                    dtype = f"{column.data_subtype.value} array"
+                else:
+                    dtype = column.data_type.value
                 print(wrap(
-                    f"* `{column.name}` - {article_adj} {column.data_type.value} value.\n",
+                    f"* `{column.name}` - {article_adj} {dtype} value.\n",
                     "  ",
                     "    "
                 ))
