@@ -26,6 +26,13 @@ def _test_dbhash_implementation(dbh: AbstractDbHash):
     del dbh['foo']
     assert 'foo' not in dbh
 
+    dbh.set_or_delete('foo', None)
+    assert 'foo' not in dbh
+    dbh.set_or_delete('foo', 'quux')
+    assert dbh['foo'] == 'quux'
+    dbh.set_or_delete('foo', None)
+    assert 'foo' not in dbh
+
 
 def test_sqlite_sqldbhash():
     from pathlib import Path

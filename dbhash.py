@@ -25,6 +25,12 @@ class AbstractDbHash(abc.ABC):
     def __contains__(self, key: str) -> bool:
         return self.get(key) is not None
 
+    def set_or_delete(self, key: str, value: Optional[str]) -> None:
+        if value is not None:
+            self[key] = value
+        elif key in self:
+            del self[key]
+
 
 class DictDbHash(AbstractDbHash):
     def __init__(self, d: Dict[str, str]):
