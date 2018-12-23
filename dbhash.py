@@ -1,0 +1,132 @@
+import abc
+from typing import Optional, Iterable, Any, Dict
+from sqlite3 import Connection, Cursor
+
+
+class AbstractDbHash(abc.ABC):
+    @abc.abstractmethod
+    def get(self, key: str) -> Optional[str]:
+        ...
+
+    @abc.abstractmethod
+    def __setitem__(self, key: str, value: str) -> None:
+        ...
+
+    @abc.abstractmethod
+    def __delitem__(self, key: str) -> None:
+        ...
+
+    def __getitem__(self, key: str) -> str:
+        item = self.get(key)
+        if item is None:
+            raise KeyError(key)
+        return item
+
+    def __contains__(self, key: str) -> bool:
+        return self.get(key) is not None
+
+
+class DictDbHash(AbstractDbHash):
+    def __init__(self, d: Dict[str, str]):
+        self.d = d
+
+    def get(self, key: str) -> Optional[str]:
+        return self.d.get(key)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        self.d[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self.d[key]
+
+
+class SqlDbHash(AbstractDbHash):
+    def __init__(self, conn: Connection, table: str, param_subst: str='?', autocommit: bool=True):
+        self.table = table
+        self.param_subst = param_subst
+        self.autocommit = autocommit
+        self.conn = conn
+        self._init_db()
+
+    def _init_db(self) -> None:
+        self._exec_sql(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.table} (
+                key text PRIMARY KEY NOT NULL,
+                value text NOT NULL
+            )
+            """
+        )
+
+    def _exec_sql(self, sql: str, params: Iterable[Any]=tuple()) -> Cursor:
+        sql = sql.replace('?', self.param_subst)
+        cur = self.conn.cursor()
+        cur.execute(sql, params)
+        return cur
+
+    def __setitem__(self, key: str, value: str) -> None:
+        if self.get(key) is not None:
+            self._exec_sql(f"UPDATE {self.table} SET value = ? WHERE key = ?",
+                           (value, key))
+        else:
+            self._exec_sql(
+                f"INSERT INTO {self.table} (key, value) VALUES (?, ?)", (key, value))
+        if self.autocommit:
+            self.conn.commit()
+
+    def __delitem__(self, key: str) -> None:
+        if key not in self:
+            raise KeyError(key)
+        self._exec_sql(
+            f"DELETE FROM {self.table} WHERE key = ?", (key,))
+        if self.autocommit:
+            self.conn.commit()
+
+    def get(self, key: str) -> Optional[str]:
+        cur = self._exec_sql(
+            f"SELECT value FROM {self.table} WHERE key = ?", (key,))
+        result = cur.fetchone()
+        return None if result is None else result[0]
+
+
+def test_dbhash_implementation(dbh: AbstractDbHash):
+    assert 'foo' not in dbh
+    assert dbh.get('foo') is None
+
+    dbh['foo'] = 'bar'
+    assert 'foo' in dbh
+    assert dbh['foo'] == 'bar'
+    assert dbh.get('foo') == 'bar'
+
+    dbh['foo'] = 'baz'
+    assert 'foo' in dbh
+    assert dbh['foo'] == 'baz'
+    assert dbh.get('foo') == 'baz'
+
+    del dbh['foo']
+    assert 'foo' not in dbh
+
+
+def test_sqlite_sqldbhash():
+    from pathlib import Path
+    import sqlite3
+
+    dbfile = Path('dbhash_test.db')
+    if dbfile.exists():
+        dbfile.unlink()
+    conn = sqlite3.connect(dbfile)
+    dbh = SqlDbHash(conn, 'blarg')
+
+    test_dbhash_implementation(dbh)
+
+    conn.close()
+    dbfile.unlink()
+
+
+def test_dictdbhash():
+    test_dbhash_implementation(DictDbHash({}))
+
+
+if __name__ == '__main__':
+    test_dictdbhash()
+    test_sqlite_sqldbhash()
